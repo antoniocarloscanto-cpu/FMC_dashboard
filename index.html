@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FMC – Dashboard de Estoque</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f6fb;
+    --card: #ffffff;
+    --primary: #1a56db;
+    --primary-light: #e8f0fe;
+    --accent1: #f59e0b;
+    --accent2: #10b981;
+    --accent3: #ef4444;
+    --accent4: #8b5cf6;
+    --text: #1e293b;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --shadow: 0 2px 16px rgba(30,41,59,0.08);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text); min-height: 100vh; }
+
+  /* HEADER */
+  header {
+    background: linear-gradient(135deg, #1a56db 0%, #1e40af 100%);
+    color: #fff;
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 10px rgba(26,86,219,0.25);
+    position: relative;
+  }
+  header .logo { display: flex; align-items: center; gap: 12px; }
+  header .logo img { height: 32px; width: auto; filter: brightness(0) invert(1); }
+  header .logo span { font-size: 17px; font-weight: 700; letter-spacing: -0.5px; }
+  header .logo small { font-size: 11px; opacity: 0.75; display: block; font-weight: 400; }
+  
+  /* UPLOAD IN HEADER */
+  .header-upload {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.12);
+    padding: 6px 16px;
+    border-radius: 30px;
+    border: 1px solid rgba(255,255,255,0.2);
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .header-upload:hover { background: rgba(255,255,255,0.2); }
+  .header-upload .up-icon { font-size: 16px; }
+  .header-upload .up-text { font-size: 12px; font-weight: 600; }
+  .header-upload #fileNameHeader { font-size: 11px; opacity: 0.8; font-weight: 400; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header .badge { background: rgba(255,255,255,0.18); border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 500; }
+  header .header-actions { display: flex; align-items: center; gap: 8px; }
+  .btn-fullscreen {
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    border: 1.5px solid rgba(255,255,255,0.35);
+    border-radius: 8px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+  }
+  .btn-fullscreen:hover { background: rgba(255,255,255,0.30); }
+
+  /* UPLOAD ZONE */
+  .upload-zone {
+    margin: 8px 24px 0;
+    background: var(--card);
+    border: 2px dashed var(--primary);
+    border-radius: 10px;
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: var(--shadow);
+    transition: background 0.2s, padding 0.3s, max-height 0.4s;
+    overflow: hidden;
+    max-height: 120px;
+  }
+  .upload-zone.minimized {
+    padding: 6px 16px;
+    max-height: 40px;
+    border-style: solid;
+    cursor: default;
+    margin: 6px 24px 0;
+  }
+  .upload-zone.minimized:hover { background: var(--card); }
+  .upload-zone:hover { background: var(--primary-light); }
+  .upload-icon { font-size: 26px; transition: font-size 0.3s; }
+  .upload-zone.minimized .upload-icon { font-size: 16px; }
+  .upload-zone .upload-text h3 { font-size: 14px; font-weight: 600; color: var(--primary); }
+  .upload-zone .upload-text p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .upload-zone.minimized .upload-text p { display: none; }
+  .upload-zone.minimized .upload-text h3 { font-size: 12px; }
+  .btn-upload {
+    margin-left: auto;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s, padding 0.3s;
+    white-space: nowrap;
+  }
+  .upload-zone.minimized .btn-upload { padding: 4px 10px; font-size: 11px; }
+  .btn-upload:hover { background: #1e40af; transform: translateY(-1px); }
+  #fileInput { display: none; }
+  #fileName { font-size: 12px; color: var(--accent2); font-weight: 500; margin-top: 2px; }
+  .upload-zone.minimized #fileName { margin-top: 0; font-size: 11px; }
+
+  /* FILTER BAR */
+  .filter-bar {
+    margin: 20px 32px 0;
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    box-shadow: var(--shadow);
+  }
+  .filter-bar label { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .filter-bar select {
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    cursor: pointer;
+    outline: none;
+    transition: border 0.2s;
+  }
+  .filter-bar select:focus { border-color: var(--primary); }
+  .filter-bar .ref-date { margin-left: auto; font-size: 13px; color: var(--muted); }
+  .filter-bar .ref-date strong { color: var(--primary); }
+
+  /* KPI CARDS */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+    margin: 8px 24px 0;
+  }
+  .kpi-card {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 10px 14px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-left: 3px solid var(--primary);
+    transition: transform 0.15s;
+  }
+  .kpi-card:hover { transform: translateY(-1px); }
+  .kpi-card.c1 { border-color: var(--primary); }
+  .kpi-card.c2 { border-color: var(--accent2); }
+  .kpi-card.c3 { border-color: var(--accent1); }
+  .kpi-card.c4 { border-color: var(--accent3); }
+  .kpi-card.c5 { border-color: var(--accent4); }
+  .kpi-card .kpi-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi-card .kpi-value { font-size: 18px; font-weight: 700; color: var(--text); }
+  .kpi-card .kpi-sub { font-size: 10px; color: var(--muted); }
+
+  /* SECTION TITLE */
+  .section-title {
+    margin: 14px 24px 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 2px;
+    background: var(--border);
+    border-radius: 2px;
+  }
+
+  /* CHARTS GRID */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 10px 24px 0;
+  }
+  .charts-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin: 10px 24px 0;
+  }
+  .chart-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+  }
+  .chart-card h4 {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chart-card h4 .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block; flex-shrink: 0;
+  }
+  .chart-wrap { position: relative; height: 200px; }
+  @media (max-width: 1100px) {
+    .charts-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* TABLE */
+  .table-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    box-shadow: var(--shadow);
+    margin: 20px 32px 0;
+    overflow-x: auto;
+  }
+  .table-card h4 { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead tr { background: var(--primary); color: #fff; }
+  thead th { padding: 10px 14px; text-align: left; font-weight: 600; font-size: 12px; letter-spacing: 0.3px; }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  tbody tr:hover { background: var(--primary-light); }
+  tbody td { padding: 9px 14px; color: var(--text); }
+  .badge-A { background: #dcfce7; color: #166534; border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
+  .badge-B { background: #fef9c3; color: #854d0e; border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
+  .badge-C { background: #fee2e2; color: #991b1b; border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
+  .badge-risk-high { background: #fee2e2; color: #991b1b; border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
+  .badge-risk-med { background: #fef9c3; color: #854d0e; border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
+  .badge-risk-low { background: #dcfce7; color: #166534; border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
+
+  /* EMPTY STATE */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .empty-state .icon { font-size: 52px; margin-bottom: 12px; }
+  .empty-state p { font-size: 15px; }
+
+  /* FOOTER */
+  footer {
+    margin: 32px 32px 20px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* TABS */
+  .tab-bar {
+    margin: 20px 32px 0;
+    display: flex;
+    gap: 4px;
+    border-bottom: 2px solid var(--border);
+  }
+  .tab-btn {
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+  }
+  .tab-btn:hover { background: var(--primary-light); color: var(--primary); }
+  .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--primary-light); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* DAILY KPI TABLE */
+  .daily-section {
+    margin: 20px 32px 0;
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    box-shadow: var(--shadow);
+    overflow-x: auto;
+  }
+  .daily-section h4 { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .daily-table { border-collapse: collapse; font-size: 12px; min-width: max-content; }
+  .daily-table thead tr { background: var(--primary); color: #fff; }
+  .daily-table thead th { padding: 10px 12px; text-align: center; font-weight: 600; font-size: 12px; white-space: nowrap; }
+  .daily-table thead th.metric-col { text-align: left; min-width: 180px; }
+  .daily-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  .daily-table tbody tr:hover { background: var(--primary-light); }
+  .daily-table tbody td { padding: 8px 12px; text-align: center; color: var(--text); white-space: nowrap; }
+  .daily-table tbody td.metric-col { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .daily-table .group-header td { background: #f1f5f9; font-weight: 700; color: var(--primary); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; }
+  .daily-table .highlight { background: #fff7ed; font-weight: 700; color: #c2410c; }
+  .daily-table .cell-max { background: #fee2e2; font-weight: 700; color: #991b1b; border-bottom: 2px solid #ef4444; }
+  .daily-table .cell-min { background: #dcfce7; font-weight: 700; color: #166534; border-bottom: 2px solid #10b981; }
+  .daily-table .pct-cell { color: var(--accent4); font-weight: 600; }
+  .daily-table .zero-cell { color: var(--accent2); }
+  .daily-table .warn-cell { color: var(--accent3); font-weight: 700; }
+  .day-selector { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .day-selector label { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .day-selector select { border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 12px; font-size: 13px; color: var(--text); background: var(--bg); cursor: pointer; outline: none; }
+  .day-selector select:focus { border-color: var(--primary); }
+
+  /* RESPONSIVE */
+  @media (max-width: 700px) {
+    header, .upload-zone, .filter-bar, .kpi-grid, .charts-grid, .table-card, .section-title, .tab-bar, .daily-section { margin-left: 12px; margin-right: 12px; }
+    .charts-grid { grid-template-columns: 1fr; }
+    .btn-upload { padding: 10px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <img src="FMC_Corporation-Logo.wine (1).png" alt="FMC Logo" />
+    <div>
+      <span>FMC Dashboard</span>
+      <small>Gestão de Estoque & Inventário</small>
+    </div>
+  </div>
+
+  <div class="header-upload" onclick="document.getElementById('fileInput').click()">
+    <span class="up-icon">📂</span>
+    <div style="display:flex; flex-direction:column;">
+      <span class="up-text">Carregar Base de Dados</span>
+      <span id="fileNameHeader">Nenhum arquivo selecionado</span>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFile(event)" style="display:none" />
+  </div>
+
+  <div class="header-actions">
+    <div class="badge" id="headerDate">Sem dados carregados</div>
+    <div id="cacheIndicator" style="display:none; background:rgba(16,185,129,0.25); border:1px solid rgba(16,185,129,0.5); border-radius:20px; padding:4px 10px; font-size:11px; font-weight:600; color:#d1fae5;">💾 Cache</div>
+    <button class="btn-fullscreen" onclick="clearCache()" id="btnClearCache" style="display:none; background:rgba(239,68,68,0.25); border-color:rgba(239,68,68,0.5);">🗑 Limpar Cache</button>
+    <button class="btn-fullscreen" onclick="toggleFullscreen()" id="btnFullscreen">⛶ Tela Cheia</button>
+  </div>
+</header>
+
+<!-- UPLOAD (REMOVED FROM BODY) -->
+
+<!-- TAB BAR -->
+<div class="tab-bar" id="tabBar" style="display:none">
+  <button class="tab-btn active" onclick="switchTab('estoque')">📊 Estoque & Inventário</button>
+  <button class="tab-btn" onclick="switchTab('diario')">📅 Análise Diária</button>
+</div>
+
+<!-- FILTER BAR (only for estoque tab) -->
+<div class="filter-bar" id="filterBar" style="display:none">
+  <label>Centro:</label>
+  <select id="filterCentro" onchange="renderAll()"><option value="">Todos</option></select>
+  <label>Tipo de Material:</label>
+  <select id="filterTipo" onchange="renderAll()"><option value="">Todos</option></select>
+  <label>Classe ABC:</label>
+  <select id="filterABC" onchange="renderAll()">
+    <option value="">Todas</option>
+    <option value="A">A</option>
+    <option value="B">B</option>
+    <option value="C">C</option>
+  </select>
+  <div class="ref-date">📅 Referência: <strong id="refDateLabel">–</strong></div>
+</div>
+
+<!-- TAB: ESTOQUE -->
+<div id="tab-estoque" class="tab-content active">
+  <div id="mainContent">
+    <div class="empty-state">
+      <div class="icon">📊</div>
+      <p>Faça o upload da base de dados para visualizar o dashboard.</p>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: ANÁLISE DIÁRIA -->
+<div id="tab-diario" class="tab-content">
+  <div id="dailyContent">
+    <div class="empty-state">
+      <div class="icon">📅</div>
+      <p>Faça o upload da base de dados para visualizar a análise diária.</p>
+    </div>
+  </div>
+</div>
+
+<footer>FMC Inventory Dashboard · Dados baseados na <strong>Última Quinta-feira</strong> disponível na base</footer>
+
+<script>
+let rawData = [];
+let filteredData = [];
+
+// ─── FULLSCREEN ─────────────────────────────────────────────────
+function toggleFullscreen() {
+  const btn = document.getElementById('btnFullscreen');
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+    btn.textContent = '✕ Sair Tela Cheia';
+  } else {
+    document.exitFullscreen();
+    btn.textContent = '⛶ Tela Cheia';
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  const btn = document.getElementById('btnFullscreen');
+  if (btn) btn.textContent = document.fullscreenElement ? '✕ Sair Tela Cheia' : '⛶ Tela Cheia';
+});
+
+// ─── LOCALSTORAGE CACHE ─────────────────────────────────────────
+const CACHE_KEY   = 'fmc_dashboard_data';
+const CACHE_NAME  = 'fmc_dashboard_filename';
+
+function saveToCache(data, fileName) {
+  try {
+    localStorage.setItem(CACHE_KEY,  JSON.stringify(data));
+    localStorage.setItem(CACHE_NAME, fileName);
+  } catch(e) {
+    console.warn('localStorage cheio ou indisponível:', e);
+  }
+}
+
+function loadFromCache() {
+  try {
+    const raw  = localStorage.getItem(CACHE_KEY);
+    const name = localStorage.getItem(CACHE_NAME) || 'arquivo salvo';
+    if (raw) return { data: JSON.parse(raw), name };
+  } catch(e) { console.warn('Erro ao ler cache:', e); }
+  return null;
+}
+
+function clearCache() {
+  localStorage.removeItem(CACHE_KEY);
+  localStorage.removeItem(CACHE_NAME);
+  rawData = [];
+  filteredData = [];
+  document.getElementById('cacheIndicator').style.display = 'none';
+  document.getElementById('btnClearCache').style.display = 'none';
+  document.getElementById('fileNameHeader').textContent = 'Nenhum arquivo selecionado';
+  document.getElementById('headerDate').textContent = 'Sem dados carregados';
+  document.getElementById('filterBar').style.display = 'none';
+  document.getElementById('tabBar').style.display = 'none';
+  document.getElementById('mainContent').innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>Faça o upload da base de dados para visualizar o dashboard.</p></div>';
+  document.getElementById('dailyContent').innerHTML = '<div class="empty-state"><div class="icon">📅</div><p>Faça o upload da base de dados para visualizar a análise diária.</p></div>';
+  // Reset file input so same file can be re-uploaded
+  const fi = document.getElementById('fileInput');
+  if (fi) fi.value = '';
+}
+
+function showCacheBadge(fileName) {
+  document.getElementById('cacheIndicator').style.display = 'flex';
+  document.getElementById('btnClearCache').style.display = 'inline-block';
+  document.getElementById('fileNameHeader').textContent = '💾 ' + fileName + ' (cache)';
+}
+
+// ─── FILE HANDLER ───────────────────────────────────────────────
+function handleFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  document.getElementById('fileNameHeader').textContent = '✅ ' + file.name;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    rawData = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    rawData = normalizeData(rawData);
+    // Salvar no cache
+    saveToCache(rawData, file.name);
+    document.getElementById('cacheIndicator').style.display = 'flex';
+    document.getElementById('btnClearCache').style.display = 'inline-block';
+    populateFilters();
+    renderAll();
+    renderDaily();
+  };
+  reader.readAsBinaryString(file);
+}
+
+// ─── AUTO-LOAD FROM CACHE ON PAGE OPEN ──────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const cached = loadFromCache();
+  if (cached) {
+    rawData = cached.data;
+    showCacheBadge(cached.name);
+    populateFilters();
+    renderAll();
+    renderDaily();
+  }
+});
+
+// ─── NORMALIZE ──────────────────────────────────────────────────
+function normalizeData(data) {
+  return data.map(row => {
+    const r = {};
+    Object.keys(row).forEach(k => {
+      const clean = k.trim();
+      r[clean] = row[k];
+    });
+    // Ensure numeric
+    ['Utilização livre','Val.utiliz.livre','Valor Total R$','Valor Total $','Estoque bloqueado','Val.estoque bloq.','Val Estoque Bloq $','Dolar_Dia. Venda','ContagemDeposito']
+      .forEach(col => { r[col] = parseFloat(String(r[col]).replace(',','.')) || 0; });
+    return r;
+  });
+}
+
+// ─── FILTERS ────────────────────────────────────────────────────
+function populateFilters() {
+  const centros = [...new Set(rawData.map(r => r['Centro']).filter(Boolean))].sort();
+  const tipos   = [...new Set(rawData.map(r => r['Tipo de material']).filter(Boolean))].sort();
+  const selC = document.getElementById('filterCentro');
+  const selT = document.getElementById('filterTipo');
+  selC.innerHTML = '<option value="">Todos</option>' + centros.map(c => `<option value="${c}">${c}</option>`).join('');
+  selT.innerHTML = '<option value="">Todos</option>' + tipos.map(t => `<option value="${t}">${t}</option>`).join('');
+  document.getElementById('filterBar').style.display = 'flex';
+  document.getElementById('tabBar').style.display = 'flex';
+}
+
+// ─── TAB SWITCH ─────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+  // Show/hide filter bar only on estoque tab
+  document.getElementById('filterBar').style.display = tab === 'estoque' ? 'flex' : 'none';
+}
+
+function getFiltered() {
+  const centro  = document.getElementById('filterCentro').value;
+  const tipo    = document.getElementById('filterTipo').value;
+  const abc     = document.getElementById('filterABC').value;
+  let data = rawData;
+  if (centro) data = data.filter(r => String(r['Centro']) === centro);
+  if (tipo)   data = data.filter(r => r['Tipo de material'] === tipo);
+  if (abc) {
+    const abcMap = buildABC(data);
+    data = data.filter(r => abcMap[r['Material']] === abc);
+  }
+  return data;
+}
+
+// ─── REFERENCE DATE (Última Quinta-feira) ───────────────────────
+function getRefDate(data) {
+  // Try to find rows where "Ultima Quinta-feira" == "SIM", else use last date in "Data Arquivo"
+  const simRows = data.filter(r => String(r['Ultima Quinta-feira']).toUpperCase() === 'SIM');
+  if (simRows.length > 0) {
+    const dates = simRows.map(r => new Date(r['Data Arquivo'])).filter(d => !isNaN(d));
+    if (dates.length) return new Date(Math.max(...dates));
+  }
+  // Fallback: last date in dataset
+  const dates = data.map(r => new Date(r['Data Arquivo'])).filter(d => !isNaN(d));
+  if (dates.length) return new Date(Math.max(...dates));
+  return null;
+}
+
+function getDataForRef(data, refDate) {
+  if (!refDate) return data;
+  const refStr = refDate.toDateString();
+  const filtered = data.filter(r => new Date(r['Data Arquivo']).toDateString() === refStr);
+  return filtered.length > 0 ? filtered : data;
+}
+
+// ─── ABC ────────────────────────────────────────────────────────
+function buildABC(data) {
+  const byMat = {};
+  data.forEach(r => {
+    const m = r['Material'];
+    byMat[m] = (byMat[m] || 0) + r['Valor Total $'];
+  });
+  const sorted = Object.entries(byMat).sort((a,b) => b[1]-a[1]);
+  const total = sorted.reduce((s,[,v]) => s+v, 0);
+  let acc = 0;
+  const map = {};
+  sorted.forEach(([m, v]) => {
+    acc += v;
+    const p = acc / total;
+    map[m] = p <= 0.8 ? 'A' : p <= 0.95 ? 'B' : 'C';
+  });
+  return map;
+}
+
+// ─── FORMAT ─────────────────────────────────────────────────────
+function fmtBRL(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0}); }
+function fmtUSD(v) { return '$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0}); }
+function fmtNum(v) { return Number(v).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0}); }
+
+// ─── RENDER ALL ─────────────────────────────────────────────────
+let chartInstances = {};
+function destroyChart(id) { if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } }
+
+function renderAll() {
+  filteredData = getFiltered();
+  const refDate = getRefDate(filteredData);
+  const refData = getDataForRef(filteredData, refDate);
+
+  // Update header date
+  const label = refDate ? refDate.toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'long', year:'numeric'}) : 'Sem data';
+  document.getElementById('headerDate').textContent = '📅 ' + label;
+  document.getElementById('refDateLabel').textContent = refDate ? refDate.toLocaleDateString('pt-BR') : '–';
+
+  const abcMap = buildABC(refData);
+
+  // KPIs
+  const totalValD = refData.reduce((s,r) => s + r['Valor Total $'], 0);
+  const totalBlqD = refData.reduce((s,r) => s + r['Val Estoque Bloq $'], 0);
+  const totalQtd  = refData.reduce((s,r) => s + r['Utilização livre'], 0);
+  const totalMats = new Set(refData.map(r => r['Material'])).size;
+  const totalLotes = new Set(refData.map(r => r['Lote'])).size;
+
+  const html = `
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi-card c1">
+      <div class="kpi-label">Valor Total Estoque</div>
+      <div class="kpi-value">${fmtUSD(totalValD)}</div>
+      <div class="kpi-sub">Coluna: Valor Total $</div>
+    </div>
+    <div class="kpi-card c2">
+      <div class="kpi-label">Qtd. Livre (UM)</div>
+      <div class="kpi-value">${fmtNum(totalQtd)}</div>
+      <div class="kpi-sub">Utilização livre total</div>
+    </div>
+    <div class="kpi-card c3">
+      <div class="kpi-label">Materiais Únicos</div>
+      <div class="kpi-value">${fmtNum(totalMats)}</div>
+      <div class="kpi-sub">${fmtNum(totalLotes)} lotes ativos</div>
+    </div>
+    <div class="kpi-card c4">
+      <div class="kpi-label">Estoque Bloqueado ($)</div>
+      <div class="kpi-value">${fmtUSD(totalBlqD)}</div>
+      <div class="kpi-sub">${((totalBlqD/totalValD)*100||0).toFixed(1)}% do total</div>
+    </div>
+    <div class="kpi-card c5">
+      <div class="kpi-label">Classe A (80% valor)</div>
+      <div class="kpi-value">${Object.values(abcMap).filter(v=>v==='A').length}</div>
+      <div class="kpi-sub">materiais críticos</div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 1: 3 gráficos lado a lado -->
+  <div class="section-title">📊 Distribuição de Valor ($)</div>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h4><span class="dot" style="background:var(--primary)"></span>Top 5 Materiais por Valor ($)</h4>
+      <div class="chart-wrap"><canvas id="chartTop10"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h4><span class="dot" style="background:var(--accent2)"></span>Valor ($) por Grupo de ID</h4>
+      <div class="chart-wrap"><canvas id="chartTipo"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h4><span class="dot" style="background:var(--accent1)"></span>Valor ($) por Centro</h4>
+      <div class="chart-wrap"><canvas id="chartCentro"></canvas></div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 2: ABC + Bloqueado + Qtd Grupo ID -->
+  <div class="section-title">📦 Estoque & Bloqueios ($)</div>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h4><span class="dot" style="background:var(--accent4)"></span>Curva ABC – Distribuição</h4>
+      <div class="chart-wrap"><canvas id="chartABC"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h4><span class="dot" style="background:var(--accent3)"></span>Bloqueado vs Livre por Centro ($)</h4>
+      <div class="chart-wrap"><canvas id="chartBlq"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h4><span class="dot" style="background:var(--accent2)"></span>Qtd. Livre por Grupo de ID</h4>
+      <div class="chart-wrap"><canvas id="chartQtdTipo"></canvas></div>
+    </div>
+  </div>
+
+  <!-- COMPARATIVO QUINTAS-FEIRAS (largura total) -->
+  <div class="section-title">📅 Comparativo – Últimas 5 Quintas-feiras</div>
+  <div style="margin:10px 24px 0;">
+    <div class="chart-card">
+      <h4><span class="dot" style="background:var(--primary)"></span>Valor Total ($) por Quinta-feira</h4>
+      <div class="chart-wrap" style="height:200px"><canvas id="chartQuintas"></canvas></div>
+    </div>
+  </div>
+
+  <!-- DEPÓSITOS CENTRO 1001 (condicional) -->
+  <div id="deposito1001Wrap"></div>
+
+  <!-- TOP 5 POR CENTRO -->
+  <div class="section-title">🏭 Top 5 Materiais por Centro ($)</div>
+  <div id="top5CentroWrap"></div>
+
+  <!-- ABC TABLE -->
+  <div class="section-title">🏆 Curva ABC – Top Materiais</div>
+  <div class="table-card">
+    <h4>Classificação ABC por Valor Total ($) – Referência: ${refDate ? refDate.toLocaleDateString('pt-BR') : '–'}</h4>
+    <div id="abcTableWrap"></div>
+  </div>
+
+  <!-- OBSOLESCENCE TABLE -->
+  <div class="section-title">⚠️ Risco de Obsolescência</div>
+  <div class="table-card">
+    <h4>Materiais com Risco de Obsolescência (Último Dia Útil = NÃO)</h4>
+    <div id="obsTableWrap"></div>
+  </div>
+  `;
+
+  document.getElementById('mainContent').innerHTML = html;
+
+  // Render charts
+  renderTop10(refData, abcMap);
+  renderGrupoID(refData);
+  renderCentro(refData);
+  renderABC(refData, abcMap);
+  renderDepositos1001(refData);
+  renderTop5PorCentro(refData);
+  renderBlq(refData);
+  renderQtdGrupoID(refData);
+  renderQuintas(filteredData);
+  renderABCTable(refData, abcMap);
+  renderObsTable(refData);
+}
+
+// ─── CHART: DEPÓSITOS CENTRO 1001 ───────────────────────────────
+function renderDepositos1001(data) {
+  destroyChart('chartDeposVal');
+  destroyChart('chartDeposSKU');
+  const wrap = document.getElementById('deposito1001Wrap');
+  if (!wrap) return;
+
+  const centro = document.getElementById('filterCentro').value;
+  if (centro !== '1001') {
+    wrap.innerHTML = '';
+    return;
+  }
+
+  const depositos = ['1000','1001','1002','1003','1004','1005'];
+  const colors    = ['#1a56db','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
+
+  // Para cada depósito, calcular valor $ e qtd SKU
+  // Usamos rawData filtrado pelo refDate mas SEM filtro de centro, para pegar todos os depósitos do centro 1001
+  const byDep = {};
+  depositos.forEach(d => { byDep[d] = { valor: 0, skus: new Set() }; });
+
+  data.forEach(r => {
+    const dep = String(r['Depósito'] || r['Deposito'] || r['deposito'] || '').trim();
+    if (byDep[dep]) {
+      byDep[dep].valor += r['Valor Total $'];
+      byDep[dep].skus.add(r['Material']);
+    }
+  });
+
+  const valores = depositos.map(d => byDep[d].valor);
+  const skus    = depositos.map(d => byDep[d].skus.size);
+
+  wrap.innerHTML = `
+    <div class="section-title">🏪 Depósitos – Centro 1001</div>
+    <div style="margin:10px 24px 0; display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="chart-card">
+        <h4><span class="dot" style="background:#1a56db"></span>Valor Total ($) por Depósito – Centro 1001</h4>
+        <div class="chart-wrap" style="height:200px"><canvas id="chartDeposVal"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h4><span class="dot" style="background:#10b981"></span>Qtd. SKU por Depósito – Centro 1001</h4>
+        <div class="chart-wrap" style="height:200px"><canvas id="chartDeposSKU"></canvas></div>
+      </div>
+    </div>`;
+
+  // Gráfico de Valor
+  const ctxVal = document.getElementById('chartDeposVal').getContext('2d');
+  chartInstances['chartDeposVal'] = new Chart(ctxVal, {
+    type: 'bar',
+    data: {
+      labels: depositos.map(d => 'Dep. ' + d),
+      datasets: [{
+        label: 'Valor Total $',
+        data: valores,
+        backgroundColor: colors,
+        borderRadius: 8,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => fmtUSD(ctx.raw) } }
+      },
+      scales: {
+        y: { ticks: { callback: v => fmtUSD(v) }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+
+  // Gráfico de SKU
+  const ctxSKU = document.getElementById('chartDeposSKU').getContext('2d');
+  chartInstances['chartDeposSKU'] = new Chart(ctxSKU, {
+    type: 'bar',
+    data: {
+      labels: depositos.map(d => 'Dep. ' + d),
+      datasets: [{
+        label: 'Qtd. SKU',
+        data: skus,
+        backgroundColor: colors,
+        borderRadius: 8,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => fmtNum(ctx.raw) + ' SKUs' } }
+      },
+      scales: {
+        y: { ticks: { stepSize: 1 }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ─── CHART: TOP 5 ───────────────────────────────────────────────
+function renderTop10(data, abcMap) {
+  destroyChart('chartTop10');
+  const byMat = {};
+  const byMatName = {};
+  data.forEach(r => {
+    const m = r['Material'];
+    byMat[m] = (byMat[m] || 0) + r['Valor Total $'];
+    byMatName[m] = r['Texto breve material'] || m;
+  });
+  const sorted = Object.entries(byMat).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const labels = sorted.map(([m]) => {
+    const name = byMatName[m] || m;
+    return name.length > 24 ? name.substring(0,24)+'…' : name;
+  });
+  const values = sorted.map(([,v]) => v);
+  const colors = ['#1a56db','#10b981','#f59e0b','#ef4444','#8b5cf6'];
+  const ctx = document.getElementById('chartTop10').getContext('2d');
+  chartInstances['chartTop10'] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors, borderRadius: 6, borderSkipped: false }] },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => fmtUSD(ctx.raw) }},
+        // Adicionando rótulos dentro das barras
+        datalabels: {
+          anchor: 'end',
+          align: 'start',
+          color: '#fff',
+          font: { weight: 'bold', size: 11 },
+          formatter: (value) => fmtUSD(value)
+        }
+      },
+      scales: { x: { ticks: { callback: v => fmtUSD(v) }, grid: { color: '#f1f5f9' } }, y: { grid: { display: false } } }
+    }
+  });
+}
+
+// ─── CHART: GRUPO ID (12,13,21,22) ──────────────────────────────
+function getGrupoID(mat) {
+  const s = String(mat);
+  if (s.startsWith('12')) return 'ID 12';
+  if (s.startsWith('13')) return 'ID 13';
+  if (s.startsWith('21')) return 'ID 21';
+  if (s.startsWith('22')) return 'ID 22';
+  return 'Outros';
+}
+
+function renderGrupoID(data) {
+  destroyChart('chartTipo');
+  const byGrupo = {};
+  data.forEach(r => {
+    const g = getGrupoID(r['ID'] || r['Material'] || '');
+    byGrupo[g] = (byGrupo[g] || 0) + r['Valor Total $'];
+  });
+  const order = ['ID 12','ID 13','ID 21','ID 22','Outros'];
+  const labels = order.filter(k => byGrupo[k] !== undefined);
+  const values = labels.map(k => byGrupo[k]);
+  const colors = ['#1a56db','#10b981','#f59e0b','#ef4444','#8b5cf6'];
+  const ctx = document.getElementById('chartTipo').getContext('2d');
+  chartInstances['chartTipo'] = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderWidth: 2, borderColor: '#fff' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { font: { size: 13 } } }, tooltip: { callbacks: { label: ctx => ctx.label + ': ' + fmtUSD(ctx.raw) } } }
+    }
+  });
+}
+
+// ─── CHART: CENTRO ──────────────────────────────────────────────
+function renderCentro(data) {
+  destroyChart('chartCentro');
+  const byCentro = {};
+  data.forEach(r => {
+    const c = String(r['Centro']);
+    byCentro[c] = (byCentro[c] || 0) + r['Valor Total $'];
+  });
+  const sorted = Object.entries(byCentro).sort((a,b)=>b[1]-a[1]);
+  const labels = sorted.map(([k])=>k);
+  const colors = ['#f59e0b','#1a56db','#10b981','#ef4444','#8b5cf6','#06b6d4'];
+  const ctx = document.getElementById('chartCentro').getContext('2d');
+  chartInstances['chartCentro'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: 'Valor $', data: sorted.map(([,v])=>v), backgroundColor: colors.slice(0, labels.length), borderRadius: 8, borderSkipped: false }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => fmtUSD(ctx.raw) } } },
+      scales: {
+        y: { ticks: { callback: v => fmtUSD(v) }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ─── TOP 5 POR CENTRO ───────────────────────────────────────────
+function renderTop5PorCentro(data) {
+  // Group by centro
+  const centros = [...new Set(data.map(r => String(r['Centro'])).filter(Boolean))].sort();
+  const chartColors = ['#1a56db','#10b981','#f59e0b','#ef4444','#8b5cf6'];
+
+  // Build grid of chart cards
+  const gridId = 'top5CentroWrap';
+  const wrap = document.getElementById(gridId);
+  if (!wrap) return;
+
+  // Destroy old charts
+  centros.forEach(c => destroyChart('chartTop5_' + c));
+
+  let gridHtml = '<div class="charts-grid">';
+  centros.forEach(c => {
+    gridHtml += `<div class="chart-card">
+      <h4><span class="dot" style="background:#1a56db"></span>Top 5 – Centro ${c}</h4>
+      <div class="chart-wrap"><canvas id="chartTop5_${c}"></canvas></div>
+    </div>`;
+  });
+  gridHtml += '</div>';
+  wrap.innerHTML = gridHtml;
+
+  // Render each centro chart
+  centros.forEach(c => {
+    const centroData = data.filter(r => String(r['Centro']) === c);
+    const byMat = {};
+    const byMatName = {};
+    centroData.forEach(r => {
+      const m = r['Material'];
+      byMat[m]     = (byMat[m]     || 0) + r['Valor Total $'];
+      byMatName[m] = r['Texto breve material'] || m;
+    });
+    const sorted = Object.entries(byMat).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const labels = sorted.map(([m]) => { const n = byMatName[m]||m; return n.length>22?n.substring(0,22)+'…':n; });
+    const values = sorted.map(([,v])=>v);
+    const ctx = document.getElementById('chartTop5_' + c);
+    if (!ctx) return;
+    chartInstances['chartTop5_' + c] = new Chart(ctx.getContext('2d'), {
+      type: 'bar',
+      data: { labels, datasets: [{ data: values, backgroundColor: chartColors, borderRadius: 6, borderSkipped: false }] },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => fmtUSD(ctx.raw) }}
+        },
+        scales: { x: { ticks: { callback: v => fmtUSD(v) }, grid: { color: '#f1f5f9' } }, y: { grid: { display: false } } }
+      }
+    });
+  });
+}
+
+// ─── CHART: ABC ─────────────────────────────────────────────────
+function renderABC(data, abcMap) {
+  destroyChart('chartABC');
+  const counts = { A: 0, B: 0, C: 0 };
+  const values = { A: 0, B: 0, C: 0 };
+  const byMat = {};
+  data.forEach(r => { const m = r['Material']; byMat[m] = (byMat[m]||0) + r['Valor Total $']; });
+  Object.entries(byMat).forEach(([m, v]) => { const cls = abcMap[m] || 'C'; counts[cls]++; values[cls] += v; });
+  const ctx = document.getElementById('chartABC').getContext('2d');
+  chartInstances['chartABC'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Classe A', 'Classe B', 'Classe C'],
+      datasets: [
+        { label: 'Qtd. Materiais', data: [counts.A, counts.B, counts.C], backgroundColor: ['#10b981','#f59e0b','#ef4444'], borderRadius: 8, yAxisID: 'y' },
+        { label: 'Valor $', data: [values.A, values.B, values.C], type: 'line', borderColor: '#1a56db', backgroundColor: 'rgba(26,86,219,0.1)', fill: true, tension: 0.4, yAxisID: 'y1', pointRadius: 5 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => ctx.dataset.label === 'Valor $' ? fmtUSD(ctx.raw) : ctx.raw + ' materiais' } } },
+      scales: {
+        y: { position: 'left', grid: { color: '#f1f5f9' } },
+        y1: { position: 'right', ticks: { callback: v => fmtUSD(v) }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ─── CHART: BLOQUEADO ───────────────────────────────────────────
+function renderBlq(data) {
+  destroyChart('chartBlq');
+  const byCentro = {};
+  data.forEach(r => {
+    const c = String(r['Centro']);
+    if (!byCentro[c]) byCentro[c] = { livre: 0, blq: 0 };
+    byCentro[c].livre += r['Valor Total $'];
+    byCentro[c].blq   += r['Val Estoque Bloq $'];
+  });
+  const labels = Object.keys(byCentro);
+  const ctx = document.getElementById('chartBlq').getContext('2d');
+  chartInstances['chartBlq'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Livre ($)', data: labels.map(c => byCentro[c].livre), backgroundColor: '#10b981', borderRadius: 6 },
+        { label: 'Bloqueado ($)', data: labels.map(c => byCentro[c].blq), backgroundColor: '#ef4444', borderRadius: 6 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtUSD(ctx.raw) } } },
+      scales: { x: { stacked: false, grid: { display: false } }, y: { ticks: { callback: v => fmtUSD(v) }, grid: { color: '#f1f5f9' } } }
+    }
+  });
+}
+
+// ─── CHART: VALOR $ POR GRUPO ID ────────────────────────────────
+function renderQtdGrupoID(data) {
+  destroyChart('chartQtdTipo');
+  const byGrupo = {};
+  data.forEach(r => {
+    const g = getGrupoID(r['ID'] || r['Material'] || '');
+    byGrupo[g] = (byGrupo[g] || 0) + r['Valor Total $'];
+  });
+  const order = ['ID 12','ID 13','ID 21','ID 22','Outros'];
+  const labels = order.filter(k => byGrupo[k] !== undefined);
+  const values = labels.map(k => byGrupo[k]);
+  const colors = ['#1a56db','#10b981','#f59e0b','#ef4444','#8b5cf6'];
+  const ctx = document.getElementById('chartQtdTipo').getContext('2d');
+  chartInstances['chartQtdTipo'] = new Chart(ctx, {
+    type: 'polarArea',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors.slice(0,labels.length).map(c=>c+'cc'), borderColor: colors.slice(0,labels.length), borderWidth: 2 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right' }, tooltip: { callbacks: { label: ctx => ctx.label + ': ' + fmtUSD(ctx.raw) } } }
+    }
+  });
+}
+
+// ─── TABLE: ABC ─────────────────────────────────────────────────
+function renderABCTable(data, abcMap) {
+  const byMat = {};
+  const byMatName = {};
+  const byMatTipo = {};
+  data.forEach(r => {
+    const m = r['Material'];
+    byMat[m] = (byMat[m]||0) + r['Valor Total $'];
+    byMatName[m] = r['Texto breve material'] || m;
+    byMatTipo[m] = r['Tipo de material'] || '–';
+  });
+  const total = Object.values(byMat).reduce((s,v)=>s+v,0);
+  const sorted = Object.entries(byMat).sort((a,b)=>b[1]-a[1]).slice(0,30);
+  let acc = 0;
+  const rows = sorted.map(([m, v]) => {
+    acc += v;
+    const cls = abcMap[m] || 'C';
+    return `<tr>
+      <td>${byMatName[m]}</td>
+      <td>${byMatTipo[m]}</td>
+      <td>${fmtUSD(v)}</td>
+      <td>${((v/total)*100).toFixed(2)}%</td>
+      <td>${((acc/total)*100).toFixed(2)}%</td>
+      <td><span class="badge-${cls}">${cls}</span></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('abcTableWrap').innerHTML = `
+    <table>
+      <thead><tr><th>Material</th><th>Tipo</th><th>Valor $</th><th>% Individual</th><th>% Acumulado</th><th>Classe</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ─── CHART: QUINTAS-FEIRAS ──────────────────────────────────────
+function renderQuintas(data) {
+  destroyChart('chartQuintas');
+  const el = document.getElementById('chartQuintas');
+  if (!el) return;
+  // Get all unique Thursday dates (Ultima Quinta-feira = SIM or day of week = 4)
+  const quintaMap = {};
+  data.forEach(r => {
+    const d = new Date(r['Data Arquivo']);
+    if (isNaN(d)) return;
+    const isQuinta = String(r['Ultima Quinta-feira']).toUpperCase() === 'SIM' || d.getDay() === 4;
+    if (isQuinta) {
+      const key = d.toDateString();
+      quintaMap[key] = (quintaMap[key] || 0) + r['Valor Total $'];
+    }
+  });
+  const sorted = Object.entries(quintaMap).sort((a,b)=>new Date(a[0])-new Date(b[0])).slice(-5);
+  if (!sorted.length) return;
+  const labels = sorted.map(([d]) => new Date(d).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'}));
+  const values = sorted.map(([,v])=>v);
+  const ctx = el.getContext('2d');
+  chartInstances['chartQuintas'] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Valor Total $',
+        data: values,
+        borderColor: '#1a56db',
+        backgroundColor: 'rgba(26,86,219,0.10)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 6,
+        pointBackgroundColor: '#1a56db',
+        borderWidth: 3
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => fmtUSD(ctx.raw) } }
+      },
+      scales: {
+        y: { ticks: { callback: v => fmtUSD(v) }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ─── RENDER DAILY ───────────────────────────────────────────────
+function renderDaily() {
+  if (!rawData.length) return;
+
+  // Get all unique dates sorted ascending — filter from 01/01/2026
+  const cutoff2026 = new Date('2026-01-01');
+  const allDates = [...new Set(rawData.map(r => {
+    const d = new Date(r['Data Arquivo']);
+    return isNaN(d) ? null : d.toDateString();
+  }).filter(Boolean))].sort((a,b) => new Date(a)-new Date(b));
+
+  // Dates from 2026 onwards for the table
+  const dates2026 = allDates.filter(d => new Date(d) >= cutoff2026);
+  const tableDates = dates2026.length > 0 ? dates2026 : allDates; // fallback to all if no 2026 data
+
+  // Get selected date (default: last)
+  const selVal = document.getElementById('dailyDateSel') ? document.getElementById('dailyDateSel').value : allDates[allDates.length-1];
+  const selDate = selVal || allDates[allDates.length-1];
+
+  // Filter data for selected date — APENAS CENTRO 3000
+  const dayData = rawData.filter(r => new Date(r['Data Arquivo']).toDateString() === selDate && String(r['Centro']) === '3000');
+
+  // ── Helper: get week label ──
+  function getWeekLabel(dateStr) {
+    const d = new Date(dateStr);
+    const start = new Date(d.getFullYear(), 0, 1);
+    const week = Math.ceil(((d - start) / 86400000 + start.getDay() + 1) / 7);
+    return `W-${week} (${d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})})`;
+  }
+
+  // ── Centro 3000 (dayData já é só C3000) ──
+  const c3000 = dayData;
+  const qtdSKU_3000 = new Set(c3000.map(r => r['Material'])).size;
+  const pareto_3000 = c3000.filter(r => String(r['Pareto 80/20'] || '').toUpperCase() === 'SIM' || r['ContagemDeposito'] > 0).length;
+  const total_3000 = c3000.reduce((s,r) => s + r['Valor Total $'], 0);
+
+  // ── Cod. 13 — dentro do Centro 3000 ──
+  const cod13 = dayData.filter(r => String(r['ID'] || r['Material'] || '').startsWith('13'));
+  const qtdCod13 = new Set(cod13.map(r => r['Material'])).size;
+  const pareto13 = Math.round(qtdCod13 * 0.3);
+  const pct13 = total_3000 > 0 ? (cod13.reduce((s,r)=>s+r['Valor Total $'],0)/total_3000*100) : 0;
+  const total13 = cod13.reduce((s,r)=>s+r['Valor Total $'],0);
+
+  // ── Cod. 21 — dentro do Centro 3000 ──
+  const cod21 = dayData.filter(r => String(r['ID'] || r['Material'] || '').startsWith('21'));
+  const qtdCod21 = new Set(cod21.map(r => r['Material'])).size;
+  const pct21 = total_3000 > 0 ? (cod21.reduce((s,r)=>s+r['Valor Total $'],0)/total_3000*100) : 0;
+  const total21 = cod21.reduce((s,r)=>s+r['Valor Total $'],0);
+
+  // ── Cod. 22 — dentro do Centro 3000 ──
+  const cod22 = dayData.filter(r => String(r['ID'] || r['Material'] || '').startsWith('22'));
+  const qtdCod22 = new Set(cod22.map(r => r['Material'])).size;
+  const pct22 = total_3000 > 0 ? (cod22.reduce((s,r)=>s+r['Valor Total $'],0)/total_3000*100) : 0;
+  const total22 = cod22.reduce((s,r)=>s+r['Valor Total $'],0);
+
+  // ── Lotes — dentro do Centro 3000 ──
+  const lotesRetorno = dayData.filter(r => String(r['Lote'] || '').toUpperCase().includes('RETORNO') || String(r['Lote'] || '').toUpperCase().includes('UNIVAR')).length;
+  const lotesEntD2   = dayData.filter(r => String(r['Lote'] || '').toUpperCase().includes('D+2') || String(r['Lote'] || '').toUpperCase().includes('ENT')).length;
+  const pctLotes = (lotesRetorno + lotesEntD2) === 0 ? 100 : Math.round(lotesRetorno / (lotesRetorno + lotesEntD2) * 100);
+
+  // ── NFs — dentro do Centro 3000 ──
+  const nfsRetorno = dayData.filter(r => String(r['Lote'] || '').toUpperCase().includes('NF') && String(r['Lote'] || '').toUpperCase().includes('RETORNO')).length;
+  const nfsEntD2   = dayData.filter(r => String(r['Lote'] || '').toUpperCase().includes('NF') && String(r['Lote'] || '').toUpperCase().includes('D+2')).length;
+
+  // ── Build columns for ALL 2026 dates (horizontal scroll) — APENAS CENTRO 3000 ──
+  const cols = tableDates.map(dateStr => {
+    const c3 = rawData.filter(r => new Date(r['Data Arquivo']).toDateString() === dateStr && String(r['Centro']) === '3000');
+    const g13 = c3.filter(r => String(r['ID']||r['Material']||'').startsWith('13'));
+    const g21 = c3.filter(r => String(r['ID']||r['Material']||'').startsWith('21'));
+    const g22 = c3.filter(r => String(r['ID']||r['Material']||'').startsWith('22'));
+    const tot3 = c3.reduce((s,r)=>s+r['Valor Total $'],0);
+    const tot13 = g13.reduce((s,r)=>s+r['Valor Total $'],0);
+    const tot21 = g21.reduce((s,r)=>s+r['Valor Total $'],0);
+    const tot22 = g22.reduce((s,r)=>s+r['Valor Total $'],0);
+    const dt = new Date(dateStr);
+    return {
+      dateStr,
+      weekLabel: getWeekLabel(dateStr),
+      dayLabel: dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}),
+      qtdSKU: new Set(c3.map(r=>r['Material'])).size,
+      pareto3: c3.filter(r=>r['ContagemDeposito']>0).length,
+      total3: tot3,
+      qtd13: new Set(g13.map(r=>r['Material'])).size,
+      pareto13: Math.round(new Set(g13.map(r=>r['Material'])).size * 0.3),
+      pct13: tot3>0?(tot13/tot3*100):0,
+      total13: tot13,
+      qtd21: new Set(g21.map(r=>r['Material'])).size,
+      pareto21: Math.round(new Set(g21.map(r=>r['Material'])).size * 0.3),
+      pct21: tot3>0?(tot21/tot3*100):0,
+      total21: tot21,
+      qtd22: new Set(g22.map(r=>r['Material'])).size,
+      pareto22: Math.round(new Set(g22.map(r=>r['Material'])).size * 0.3),
+      pct22: tot3>0?(tot22/tot3*100):0,
+      total22: tot22,
+    };
+  });
+
+  // Find max and min for each value/qty metric (per row highlight)
+  function rowMinMax(key) {
+    const vals = cols.map(c => c[key]).filter(v => v > 0);
+    return { max: vals.length ? Math.max(...vals) : null, min: vals.length ? Math.min(...vals) : null };
+  }
+  const mm = {
+    total3:  rowMinMax('total3'),
+    qtdSKU:  rowMinMax('qtdSKU'),
+    pareto3: rowMinMax('pareto3'),
+    qtd13:   rowMinMax('qtd13'),
+    total13: rowMinMax('total13'),
+    qtd21:   rowMinMax('qtd21'),
+    total21: rowMinMax('total21'),
+    qtd22:   rowMinMax('qtd22'),
+    total22: rowMinMax('total22'),
+  };
+
+  const maxCol = cols.find(c => c.total3 === mm.total3.max);
+  const minCol = cols.find(c => c.total3 === mm.total3.min);
+
+  function cellClass(val, key) {
+    if (!val || val === 0) return '';
+    if (mm[key] && val === mm[key].max) return 'cell-max';
+    if (mm[key] && val === mm[key].min) return 'cell-min';
+    return '';
+  }
+
+  function pctCell(val) { return `<td class="pct-cell">${val.toFixed(2)}%</td>`; }
+  function valUSDCell(val, key) { return `<td class="${cellClass(val, key)}">${fmtUSD(val)}</td>`; }
+
+  const thDays = cols.map(c => `<th>${c.dayLabel}</th>`).join('');
+  const thWeeks = cols.map(c => `<th style="font-size:11px;opacity:0.8">${c.weekLabel}</th>`).join('');
+
+  function buildRows(label, key, fmt) {
+    const tds = cols.map(c => {
+      const v = c[key];
+      return `<td>${fmt(v)}</td>`;
+    }).join('');
+    return `<tr><td class="metric-col">${label}</td>${tds}</tr>`;
+  }
+
+  const tableHTML = `
+  <table class="daily-table">
+    <thead>
+      <tr><th class="metric-col">Métrica</th>${thWeeks}</tr>
+      <tr><th class="metric-col">Dia</th>${thDays}</tr>
+    </thead>
+    <tbody>
+      <tr class="group-header"><td colspan="${cols.length+1}">🏭 Centro 3000</td></tr>
+      ${buildRows('Qtd SKU (Centro 3000)', 'qtdSKU', fmtNum)}
+      ${buildRows('Pareto 80/20', 'pareto3', fmtNum)}
+      <tr><td class="metric-col" style="font-weight:700;color:var(--primary)">Total de $ (Centro 3000)</td>${cols.map(c=>`<td class="${c.total3===mm.total3.max?'cell-max':c.total3===mm.total3.min&&c.total3>0?'cell-min':''}">${fmtUSD(c.total3)}</td>`).join('')}</tr>
+
+      <tr class="group-header"><td colspan="${cols.length+1}">🔵 Qtd Cod. (13)</td></tr>
+      ${buildRows('Qtd Cod. (13)', 'qtd13', fmtNum)}
+      <tr><td class="metric-col">%</td>${cols.map(c=>pctCell(c.pct13)).join('')}</tr>
+      ${buildRows('Total de $ (ID 13)', 'total13', fmtUSD)}
+
+      <tr class="group-header"><td colspan="${cols.length+1}">🟢 Qtd Cod. (21)</td></tr>
+      ${buildRows('Qtd Cod. (21)', 'qtd21', fmtNum)}
+      <tr><td class="metric-col">%</td>${cols.map(c=>pctCell(c.pct21)).join('')}</tr>
+      ${buildRows('Total de $ (ID 21)', 'total21', fmtUSD)}
+
+      <tr class="group-header"><td colspan="${cols.length+1}">🟡 Qtd Cod. (22)</td></tr>
+      ${buildRows('Qtd Cod. (22)', 'qtd22', fmtNum)}
+      <tr><td class="metric-col">%</td>${cols.map(c=>pctCell(c.pct22)).join('')}</tr>
+      ${buildRows('Total de $ (ID 22)', 'total22', fmtUSD)}
+    </tbody>
+  </table>`;
+
+  // KPI cards for selected day
+  const kpiHTML = `
+  <div class="kpi-grid" style="margin-top:20px">
+    <div class="kpi-card c1">
+      <div class="kpi-label">Total $ – Centro 3000</div>
+      <div class="kpi-value">${fmtUSD(total_3000)}</div>
+      <div class="kpi-sub">${qtdSKU_3000} SKUs ativos</div>
+    </div>
+    <div class="kpi-card c2">
+      <div class="kpi-label">ID 13 – Valor $</div>
+      <div class="kpi-value">${fmtUSD(total13)}</div>
+      <div class="kpi-sub">${pct13.toFixed(2)}% do total C3000 · ${qtdCod13} cods</div>
+    </div>
+    <div class="kpi-card c3">
+      <div class="kpi-label">ID 21 – Valor $</div>
+      <div class="kpi-value">${fmtUSD(total21)}</div>
+      <div class="kpi-sub">${pct21.toFixed(2)}% do total C3000 · ${qtdCod21} cods</div>
+    </div>
+    <div class="kpi-card c4">
+      <div class="kpi-label">ID 22 – Valor $</div>
+      <div class="kpi-value">${fmtUSD(total22)}</div>
+      <div class="kpi-sub">${pct22.toFixed(2)}% do total C3000 · ${qtdCod22} cods</div>
+    </div>
+    <div class="kpi-card c5">
+      <div class="kpi-label">Lotes Retorno / Ent. D+2</div>
+      <div class="kpi-value">${lotesRetorno} / ${lotesEntD2}</div>
+      <div class="kpi-sub">${pctLotes}% conformidade</div>
+    </div>
+  </div>`;
+
+  // ── 2 cards: maior e menor estoque do período 2026 ──
+  const maxMinHTML = `
+  <div class="kpi-grid" style="margin-top:16px; grid-template-columns: repeat(auto-fit, minmax(280px,1fr));">
+    <div class="kpi-card" style="border-left:4px solid #10b981; background: linear-gradient(135deg,#f0fdf4,#fff);">
+      <div class="kpi-label" style="color:#166534;">🏆 Maior Estoque – Centro 3000 (2026)</div>
+      <div class="kpi-value" style="color:#166534; font-size:28px;">${maxCol ? fmtUSD(maxCol.total3) : '–'}</div>
+      <div class="kpi-sub" style="color:#166534; font-weight:600;">${maxCol ? new Date(maxCol.dateStr).toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : '–'}</div>
+    </div>
+    <div class="kpi-card" style="border-left:4px solid #ef4444; background: linear-gradient(135deg,#fff1f2,#fff);">
+      <div class="kpi-label" style="color:#991b1b;">📉 Menor Estoque – Centro 3000 (2026)</div>
+      <div class="kpi-value" style="color:#991b1b; font-size:28px;">${minCol ? fmtUSD(minCol.total3) : '–'}</div>
+      <div class="kpi-sub" style="color:#991b1b; font-weight:600;">${minCol ? new Date(minCol.dateStr).toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : '–'}</div>
+    </div>
+  </div>`;
+
+  const html = `
+    <div style="margin:20px 32px 0; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+      <div class="day-selector">
+        <label>📅 Selecionar Dia:</label>
+        <select id="dailyDateSel" onchange="renderDaily()">
+          ${allDates.map(d => {
+            const dt = new Date(d);
+            const lbl = dt.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'});
+            return `<option value="${d}" ${d===selDate?'selected':''}>${lbl}</option>`;
+          }).join('')}
+        </select>
+      </div>
+      <span style="font-size:13px;color:var(--muted)">📆 Tabela exibindo <strong>${cols.length}</strong> dias a partir de 01/01/2026</span>
+    </div>
+    ${kpiHTML}
+    ${maxMinHTML}
+    <div class="section-title">📋 Evolução Diária – Centro 3000 (2026)</div>
+    <div class="daily-section" style="overflow-x:auto;">
+      <h4>📊 Painel de KPIs Diários – Centro 3000 · ${cols.length} dias (desde 01/01/2026) · <span style="color:var(--muted);font-weight:400;font-size:12px">← role horizontalmente →</span></h4>
+      <div style="overflow-x:auto; width:100%;">
+        ${tableHTML}
+      </div>
+    </div>
+    <div class="section-title">📈 Gráfico Comparativo Diário – Centro 3000 ($)</div>
+    <div class="charts-grid" style="margin-bottom:32px">
+      <div class="chart-card" style="grid-column:1/-1">
+        <h4><span class="dot" style="background:var(--primary)"></span>Valor Total $ por Dia – Centro 3000 · IDs 13, 21, 22 (2026)</h4>
+        <div class="chart-wrap" style="height:340px"><canvas id="chartDaily"></canvas></div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('dailyContent').innerHTML = html;
+
+  // Render daily chart
+  destroyChart('chartDaily');
+  const ctx = document.getElementById('chartDaily').getContext('2d');
+  chartInstances['chartDaily'] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: cols.map(c => c.dayLabel),
+      datasets: [
+        { label: 'Centro 3000 ($)', data: cols.map(c=>c.total3), borderColor: '#1a56db', backgroundColor: 'rgba(26,86,219,0.08)', fill: true, tension: 0.4, pointRadius: 4, borderWidth: 2 },
+        { label: 'ID 13 ($)', data: cols.map(c=>c.total13), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.06)', fill: false, tension: 0.4, pointRadius: 4, borderWidth: 2 },
+        { label: 'ID 21 ($)', data: cols.map(c=>c.total21), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.06)', fill: false, tension: 0.4, pointRadius: 4, borderWidth: 2 },
+        { label: 'ID 22 ($)', data: cols.map(c=>c.total22), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.06)', fill: false, tension: 0.4, pointRadius: 4, borderWidth: 2 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtUSD(ctx.raw) } }
+      },
+      scales: {
+        y: { ticks: { callback: v => fmtUSD(v) }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ─── TABLE: OBSOLESCÊNCIA ───────────────────────────────────────
+function renderObsTable(data) {
+  const riskRows = data.filter(r => String(r['Ultimo Dia Util']).toUpperCase() === 'NÃO' && r['Utilização livre'] > 0);
+  const byMat = {};
+  riskRows.forEach(r => {
+    const m = r['Material'];
+    if (!byMat[m]) byMat[m] = { nome: r['Texto breve material'] || m, tipo: r['Tipo de material'] || '–', qtd: 0, val: 0, lotes: new Set() };
+    byMat[m].qtd += r['Utilização livre'];
+    byMat[m].val += r['Valor Total $'];
+    byMat[m].lotes.add(r['Lote']);
+  });
+  const sorted = Object.entries(byMat).sort((a,b)=>b[1].val-a[1].val).slice(0,25);
+  if (!sorted.length) {
+    document.getElementById('obsTableWrap').innerHTML = '<p style="color:var(--accent2);padding:16px">✅ Nenhum material com risco de obsolescência identificado.</p>';
+    return;
+  }
+  const maxVal = sorted[0][1].val;
+  const rows = sorted.map(([m, d]) => {
+    const risk = d.val > maxVal * 0.5 ? 'high' : d.val > maxVal * 0.15 ? 'med' : 'low';
+    const riskLabel = risk === 'high' ? 'Alto' : risk === 'med' ? 'Médio' : 'Baixo';
+    return `<tr>
+      <td>${d.nome}</td>
+      <td>${d.tipo}</td>
+      <td>${fmtNum(d.qtd)}</td>
+      <td>${fmtUSD(d.val)}</td>
+      <td>${d.lotes.size}</td>
+      <td><span class="badge-risk-${risk}">${riskLabel}</span></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('obsTableWrap').innerHTML = `
+    <table>
+      <thead><tr><th>Material</th><th>Tipo</th><th>Qtd. Livre</th><th>Valor $</th><th>Lotes</th><th>Risco</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+</script>
+</body>
+</html>
